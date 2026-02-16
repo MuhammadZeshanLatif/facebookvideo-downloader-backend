@@ -31,8 +31,8 @@ app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
     author: "MMuhammad Zeeshan",
-    contact: "https://www.milanb.com.np/",
-    message: "Universal Downloader API is running",
+    contact: "zeeshanmuhammad42201@gmail.com",
+    message: "FacebooDownloader API is running",
     endpoints,
   });
 });
