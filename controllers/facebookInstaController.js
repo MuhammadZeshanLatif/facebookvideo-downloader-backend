@@ -80,17 +80,21 @@ const resolveMediaUrl = (mediaUrl) => {
   }
 };
 
-const buildUpstreamHeaders = (rawMediaUrl, resolvedMediaUrl) => {
+const buildUpstreamHeaders = (rawMediaUrl, resolvedMediaUrl, clientHeaders = {}) => {
   const tokenHeaders = {
     ...parseTokenHeaders(rawMediaUrl),
     ...parseTokenHeaders(resolvedMediaUrl),
   };
-  return {
+  const headers = {
     "User-Agent": "Mozilla/5.0",
     Accept: "*/*",
     Referer: "https://www.facebook.com/",
     ...tokenHeaders,
   };
+  if (clientHeaders.range) {
+    headers.Range = clientHeaders.range;
+  }
+  return headers;
 };
 
 async function handleFacebookInstaDownload(req, res) {
@@ -177,20 +181,39 @@ async function handleMediaStream(req, res) {
     // Keep stream on backend so browser can play cross-origin protected media.
     const response = await axios.get(resolvedMediaUrl, {
       responseType: "stream",
-      headers: buildUpstreamHeaders(mediaUrl, resolvedMediaUrl),
+      headers: buildUpstreamHeaders(mediaUrl, resolvedMediaUrl, req.headers),
       maxRedirects: 5,
+      validateStatus: () => true,
     });
 
-    if (response.headers["content-type"]) {
-      res.setHeader("Content-Type", response.headers["content-type"]);
-    } else {
+    if (response.status >= 400) {
+      return res.status(response.status).json({
+        success: false,
+        error: "Failed to stream media from upstream.",
+      });
+    }
+
+    // Forward upstream status so browsers can handle partial content (206).
+    res.status(response.status);
+
+    const passthroughHeaders = [
+      "content-type",
+      "content-length",
+      "accept-ranges",
+      "content-range",
+      "cache-control",
+      "etag",
+      "last-modified",
+    ];
+    passthroughHeaders.forEach((headerName) => {
+      const value = response.headers[headerName];
+      if (value) {
+        res.setHeader(headerName, value);
+      }
+    });
+
+    if (!response.headers["content-type"]) {
       res.setHeader("Content-Type", "application/octet-stream");
-    }
-    if (response.headers["content-length"]) {
-      res.setHeader("Content-Length", response.headers["content-length"]);
-    }
-    if (response.headers["accept-ranges"]) {
-      res.setHeader("Accept-Ranges", response.headers["accept-ranges"]);
     }
 
     response.data.on("error", () => {

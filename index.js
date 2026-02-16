@@ -8,7 +8,21 @@ app.use(cors());
 app.use(express.json());
 app.set("json spaces", 2);
 app.use(morgan("dev"));
-app.use("/api/meta", require("./routes/facebookInsta"));
+let metaRouter;
+app.use("/api/meta", (req, res, next) => {
+  try {
+    if (!metaRouter) {
+      metaRouter = require("./routes/facebookInsta");
+    }
+    return metaRouter(req, res, next);
+  } catch (err) {
+    console.error("Failed to load /api/meta router:", err.message);
+    return res.status(500).json({
+      success: false,
+      error: "Backend initialization failed. Check deployment logs.",
+    });
+  }
+});
 const endpoints = [
   "/api/meta",
 ];
